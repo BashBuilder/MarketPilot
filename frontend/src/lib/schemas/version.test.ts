@@ -70,4 +70,10 @@ describe("ReviseRequestSchema", () => {
   it("rejects an empty comment", () => {
     expect(() => ReviseRequestSchema.parse({ comment: "  " })).toThrow();
   });
+
+  it("rejects a target node outside the eight pipeline agents", () => {
+    expect(() =>
+      ReviseRequestSchema.parse({ comment: "Sharper headline", target_node: "intern" }),
+    ).toThrow();
+  });
 });

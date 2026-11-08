@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AgentSchema } from "./sse-events";
 
 export const VersionSummarySchema = z.object({
   version: z.number().int().positive(),
@@ -32,7 +33,7 @@ export const ApproveResponseSchema = z.object({
 
 export const ReviseRequestSchema = z.object({
   comment: z.string().trim().min(1).max(2000),
-  target_node: z.string().min(1).optional(),
+  target_node: AgentSchema.optional(),
 });
 
 export const ReviseResponseSchema = z.object({

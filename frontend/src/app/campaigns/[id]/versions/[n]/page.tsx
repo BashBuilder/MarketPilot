@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { PageContainer } from "@/components/layout/page-container";
+import { VersionApproval } from "@/components/approval/VersionApproval";
 import { AssetGrid } from "@/components/campaign/AssetGrid";
 import { BriefCard } from "@/components/campaign/BriefCard";
 import { ComplianceReport } from "@/components/campaign/ComplianceReport";
@@ -94,10 +95,15 @@ export default async function VersionReviewPage({ params }: VersionReviewPagePro
         </p>
       </header>
 
-      {/*
-        Step 7 slot: render <VersionApproval /> here. It needs the campaign id,
-        the version number and campaign.active_run_id.
-      */}
+      {campaign.status === "awaiting_approval" &&
+      campaign.active_run_id !== null &&
+      version === campaign.latest_version ? (
+        <VersionApproval
+          campaignId={campaign.id}
+          version={version}
+          runId={campaign.active_run_id}
+        />
+      ) : null}
 
       <div className="mt-8 space-y-6">
         <BriefCard brief={pkg.brief} />

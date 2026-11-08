@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   CampaignPackageSchema,
   ComplianceSchema,
@@ -10,6 +10,10 @@ import {
 import { demoCampaign, demoVersions } from "@/mocks/fixtures/campaigns";
 import { hairCarePackage } from "@/mocks/fixtures/hair-care";
 import VersionReviewPage from "./page";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
 
 const server = setupServer();
 
@@ -28,9 +32,12 @@ const packageWithFailure = CampaignPackageSchema.parse({
   },
 });
 
-function usePackage(pkg: CampaignPackage) {
+function usePackage(
+  pkg: CampaignPackage,
+  campaign = demoCampaign,
+) {
   server.use(
-    http.get("*/api/v1/campaigns/:id", () => HttpResponse.json(demoCampaign)),
+    http.get("*/api/v1/campaigns/:id", () => HttpResponse.json(campaign)),
     http.get("*/api/v1/campaigns/:id/versions", () => HttpResponse.json(demoVersions)),
     http.get("*/api/v1/campaigns/:id/versions/:version", () => HttpResponse.json(pkg)),
   );
@@ -63,6 +70,23 @@ describe("VersionReviewPage", () => {
       screen.getByText("The headline promises a result the copy cannot support."),
     ).toBeInTheDocument();
     expect(screen.getByText("84")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Version 1 is ready for review" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the approval panel once the run is no longer awaiting approval", async () => {
+    usePackage(hairCarePackage, {
+      ...demoCampaign,
+      status: "completed",
+      active_run_id: null,
+    });
+
+    await renderPage();
+
+    expect(
+      screen.queryByRole("heading", { name: "Version 1 is ready for review" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders an empty state for every missing section", async () => {
