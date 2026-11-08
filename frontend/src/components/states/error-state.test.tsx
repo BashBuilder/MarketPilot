@@ -17,7 +17,7 @@ describe("ErrorState", () => {
         title="Invalid version"
         message="Version 7 does not exist."
         headingLevel={3}
-        action={<a href="/campaigns">Back to campaigns</a>}
+        action={<button type="button">Back to campaigns</button>}
       />,
     );
 
@@ -25,7 +25,7 @@ describe("ErrorState", () => {
       screen.getByRole("heading", { level: 3, name: "Invalid version" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Back to campaigns" }),
+      screen.getByRole("button", { name: "Back to campaigns" }),
     ).toBeInTheDocument();
   });
 });
