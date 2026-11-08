@@ -49,16 +49,18 @@ export const TYPE_SCALE: ScaleToken[] = [
   { name: "caption", variable: "--text-caption", value: "0.75rem" },
 ];
 
+// The `--space-*` prefix keeps these tokens out of Tailwind's `--spacing-*`
+// namespace, which also drives named `max-w-*` sizes (see globals.css).
 export const SPACING_SCALE: ScaleToken[] = [
-  { name: "3xs", variable: "--spacing-3xs", value: "0.25rem" },
-  { name: "2xs", variable: "--spacing-2xs", value: "0.5rem" },
-  { name: "xs", variable: "--spacing-xs", value: "0.75rem" },
-  { name: "sm", variable: "--spacing-sm", value: "1rem" },
-  { name: "md", variable: "--spacing-md", value: "1.5rem" },
-  { name: "lg", variable: "--spacing-lg", value: "2rem" },
-  { name: "xl", variable: "--spacing-xl", value: "3rem" },
-  { name: "2xl", variable: "--spacing-2xl", value: "4rem" },
-  { name: "3xl", variable: "--spacing-3xl", value: "6rem" },
+  { name: "3xs", variable: "--space-3xs", value: "0.25rem" },
+  { name: "2xs", variable: "--space-2xs", value: "0.5rem" },
+  { name: "xs", variable: "--space-xs", value: "0.75rem" },
+  { name: "sm", variable: "--space-sm", value: "1rem" },
+  { name: "md", variable: "--space-md", value: "1.5rem" },
+  { name: "lg", variable: "--space-lg", value: "2rem" },
+  { name: "xl", variable: "--space-xl", value: "3rem" },
+  { name: "2xl", variable: "--space-2xl", value: "4rem" },
+  { name: "3xl", variable: "--space-3xl", value: "6rem" },
 ];
 
 export const RADIUS_SCALE: ScaleToken[] = [
