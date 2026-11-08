@@ -1,6 +1,7 @@
 """Application settings loaded from the environment."""
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import Field, ValidationError
@@ -9,6 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 DEFAULT_FRONTEND_ORIGIN = "http://localhost:3000,https://marketpilot-demo-frontend.vercel.app"
 
 ImageProvider = Literal["fake", "hosted", "huggingface", "cloudflare"]
+SearchProviderName = Literal["fake"]
 
 
 class SettingsError(RuntimeError):
@@ -47,6 +49,8 @@ class Settings(BaseSettings):
     database_url: str
     redis_url: str
     image_provider: ImageProvider = "fake"
+    search_provider: SearchProviderName = "fake"
+    asset_dir: Path = Path("assets")
     cost_cap_per_run: float = 2.0
     max_image_calls_per_run: int = Field(default=8, ge=0)
     max_search_calls_per_run: int = Field(default=20, ge=0)

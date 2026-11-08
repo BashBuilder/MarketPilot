@@ -1,6 +1,7 @@
 """Tests for environment-backed application settings."""
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
@@ -33,6 +34,8 @@ def test_settings_loads_required_values_and_defaults(
     assert settings.redis_url == REQUIRED_ENV["REDIS_URL"]
     assert settings.deepseek_base_url == "https://api.deepseek.com"
     assert settings.image_provider == "fake"
+    assert settings.search_provider == "fake"
+    assert settings.asset_dir == Path("assets")
     assert settings.cost_cap_per_run == 2.0
     assert settings.max_image_calls_per_run == 8
     assert settings.max_search_calls_per_run == 20
