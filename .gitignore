@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+
+# Build output and generated artefacts
+.next/
+dist/
+build/
+coverage/
+generated_assets/
+*.safetensors
+
+# Environment files (never commit real values)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Tool caches / OS noise
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
