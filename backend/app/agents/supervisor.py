@@ -15,31 +15,40 @@ RETRY_EXHAUSTED_MARKERS: Final = ("retry_exhausted", "retryexhausted")
 def route(state: WorkflowState, *, settings: Settings | None = None) -> RouteDecision:
     """Return the next automatic routing decision.
 
-    The decision is deterministic and LLM-free. A low-score loop advances the
-    shared auto-loop counter on ``state`` so the caller can checkpoint it.
+    The decision is deterministic and LLM-free. Every automatic loop advances
+    the shared auto-loop counter on ``state`` so the caller can checkpoint it.
     """
-    if _retry_exhausted(state):
+    resolved = settings or get_settings()
+    if state.status == "escalated" or _retry_exhausted(state):
         return RouteDecision(
             next_node="human",
-            reason="A retry was exhausted; escalate to the human approval gate.",
+            reason="The run escalated; open the human approval gate.",
             escalate=True,
         )
 
     failed = _failed_compliance_items(state)
-    if failed and _has_copy_failure(failed):
-        return RouteDecision(
-            next_node="copywriter",
-            reason="Compliance failed for copy; rerun the copywriter before the gate.",
-            escalate=False,
-        )
     if failed:
+        loops = state.retry_counters.get(AUTO_LOOP_COUNTER, 0)
+        if loops >= resolved.max_auto_loops:
+            return RouteDecision(
+                next_node="human",
+                reason=(
+                    f"Compliance still fails after {loops} automatic loops; "
+                    "open the human approval gate."
+                ),
+                escalate=False,
+            )
+        state.retry_counters[AUTO_LOOP_COUNTER] = loops + 1
+        node: PipelineNode = "copywriter" if _has_copy_failure(failed) else "designer"
         return RouteDecision(
-            next_node="designer",
-            reason="Compliance failed outside copy; rerun the designer before the gate.",
+            next_node=node,
+            reason=(
+                f"Compliance failed; rerun {node} (auto loop {loops + 1} of "
+                f"{resolved.max_auto_loops})."
+            ),
             escalate=False,
         )
 
-    resolved = settings or get_settings()
     score = state.score
     if score is not None and score.total < resolved.score_threshold:
         loops = state.retry_counters.get(AUTO_LOOP_COUNTER, 0)

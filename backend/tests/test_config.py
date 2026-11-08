@@ -35,9 +35,11 @@ def test_settings_loads_required_values_and_defaults(
     assert settings.deepseek_base_url == "https://api.deepseek.com"
     assert settings.image_provider == "fake"
     assert settings.search_provider == "fake"
+    assert settings.embedder == "fake"
     assert settings.asset_dir == Path("assets")
     assert settings.cost_cap_per_run == 2.0
     assert settings.max_image_calls_per_run == 8
+    assert settings.max_image_prompt_length == 1000
     assert settings.max_search_calls_per_run == 20
     assert settings.retry_max_attempts == 3
     assert settings.score_threshold == 70

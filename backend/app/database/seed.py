@@ -1,8 +1,6 @@
 """Idempotent demo campaign and policy document seed data."""
 
 import asyncio
-import hashlib
-import math
 import uuid
 from typing import NamedTuple
 
@@ -11,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Campaign, CampaignStatus, PolicyDocument
 from app.database.session import session_scope
+from app.llm.embeddings import Embedder, build_embedder
 
 DEMO_CAMPAIGN_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
 DEMO_CAMPAIGN_IDEA = (
@@ -60,16 +59,13 @@ POLICY_DOCUMENTS: tuple[PolicySeed, ...] = (
 )
 
 
-def fake_embedding(text: str, dimensions: int = 384) -> list[float]:
-    """Deterministic stand-in for the fake embedder used before Phase 3."""
-    digest = hashlib.sha256(text.encode("utf-8")).digest()
-    raw = [digest[index % len(digest)] / 255.0 for index in range(dimensions)]
-    norm = math.sqrt(sum(value * value for value in raw)) or 1.0
-    return [value / norm for value in raw]
+def _document_text(document: PolicySeed) -> str:
+    return f"{document.title}\n{document.content}"
 
 
-async def seed(session: AsyncSession) -> None:
+async def seed(session: AsyncSession, embedder: Embedder | None = None) -> None:
     """Insert missing seed rows; running it twice is a no-op."""
+    active = embedder or build_embedder()
     if await session.get(Campaign, DEMO_CAMPAIGN_ID) is None:
         session.add(
             Campaign(
@@ -91,7 +87,7 @@ async def seed(session: AsyncSession) -> None:
                 source=document.source,
                 content=document.content,
                 doc_metadata={"sample": True},
-                embedding=fake_embedding(f"{document.title}\n{document.content}"),
+                embedding=await active.embed(_document_text(document)),
             )
         )
 

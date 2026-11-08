@@ -70,7 +70,12 @@ async def resume_point(
         checkpoint = await CheckpointRepository(db).latest_for_run(as_uuid(run_id))
         if checkpoint is None:
             return PIPELINE_NODES[0]
+        state = parse_state(checkpoint.state)
+        if state.status == "escalated":
+            return HUMAN_GATE
         if checkpoint.node != HUMAN_GATE:
+            if checkpoint.node == "supervisor" and state.target_node in PIPELINE_NODES:
+                return state.target_node
             return next_node(checkpoint.node)
         approvals = await ApprovalRepository(db).list_for_run(checkpoint.run_id)
         if not approvals:
