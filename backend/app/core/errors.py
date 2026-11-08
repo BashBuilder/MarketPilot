@@ -28,10 +28,13 @@ class ToolError(MarketPilotError):
         tool: str,
         message: str,
         *,
+        retryable: bool = False,
         details: dict[str, Any] | None = None,
     ) -> None:
         self.tool = tool
-        super().__init__(f"{tool}: {message}", details=details)
+        self.retryable = retryable
+        merged_details = {**(details or {}), "retryable": retryable}
+        super().__init__(f"{tool}: {message}", details=merged_details)
 
 
 class ValidationFailure(MarketPilotError):

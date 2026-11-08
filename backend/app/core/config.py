@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Any, Literal
 
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_FRONTEND_ORIGIN = "http://localhost:3000,https://marketpilot-demo-frontend.vercel.app"
@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     redis_url: str
     image_provider: ImageProvider = "fake"
     cost_cap_per_run: float = 2.0
+    max_image_calls_per_run: int = Field(default=8, ge=0)
+    max_search_calls_per_run: int = Field(default=20, ge=0)
+    retry_max_attempts: int = Field(default=3, ge=1)
     frontend_origin: str = DEFAULT_FRONTEND_ORIGIN
 
     def __init__(self, **values: Any) -> None:
