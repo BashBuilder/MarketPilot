@@ -1,98 +1,89 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AGENT_META } from "@/components/agents/agent-meta";
+import { CampaignCard } from "@/components/campaign/CampaignCard";
 import { PageContainer } from "@/components/layout/page-container";
+import { EmptyState } from "@/components/states/empty-state";
+import { ErrorState } from "@/components/states/error-state";
+import { RetryRefreshButton } from "@/components/states/retry-refresh-button";
 import { buttonVariants } from "@/components/ui/button";
+import { isApiError, listCampaigns } from "@/lib/api";
+import type { CampaignSummary } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
-import { AGENT_ORDER } from "@/lib/sse/run-state";
+
+export const instant = false;
 
 export const metadata: Metadata = {
-  title: "MarketPilot · Autonomous advertising creative",
+  title: "Campaigns · MarketPilot",
   description:
-    "Turn a campaign idea into a reviewed package of brief, research, copy, visuals, compliance and creative score.",
+    "Every campaign idea, its latest version, score and approval status in one place.",
 };
 
-export default function Home() {
+async function loadCampaigns(): Promise<
+  { ok: true; campaigns: CampaignSummary[] } | { ok: false; cause: unknown }
+> {
+  try {
+    return { ok: true, campaigns: await listCampaigns() };
+  } catch (cause) {
+    return { ok: false, cause };
+  }
+}
+
+export default async function Home() {
+  const result = await loadCampaigns();
+
   return (
-    <PageContainer className="py-16 sm:py-24">
-      <section className="max-w-3xl">
-        <p className="text-caption uppercase tracking-widest text-brand">
-          Autonomous creative pipeline
-        </p>
-        <h1 className="mt-4 text-display text-foreground">
-          From idea to campaign package, reviewed by you.
-        </h1>
-        <p className="mt-6 max-w-2xl text-body text-muted-foreground">
-          Seven agents draft the brief, research the audience, write the copy,
-          direct the visuals, check compliance and score the work. You approve
-          the version or send it back for another pass.
-        </p>
-        <div className="mt-8 flex flex-wrap gap-3">
+    <PageContainer className="py-10 sm:py-14">
+      <div className="mx-auto max-w-4xl">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div className="max-w-2xl">
+            <p className="text-caption uppercase tracking-widest text-brand">Campaigns</p>
+            <h1 className="mt-2 text-display text-foreground">Your campaigns</h1>
+            <p className="mt-3 text-body text-muted-foreground">
+              Every idea and its latest version, score and approval status.
+            </p>
+          </div>
           <Link href="/campaigns/new" className={cn(buttonVariants({ size: "lg" }))}>
-            Start a campaign
+            New campaign
           </Link>
-          <Link
-            href="/style"
-            className={cn(buttonVariants({ variant: "outline", size: "lg" }))}
-          >
-            Design system
-          </Link>
-        </div>
-      </section>
+        </header>
 
-      <section aria-labelledby="pipeline-heading" className="mt-16 sm:mt-20">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 id="pipeline-heading" className="text-title text-foreground">
-              The pipeline
-            </h2>
-            <p className="mt-2 max-w-2xl text-small text-muted-foreground">
-              Each agent produces a verified artifact. The supervisor routes
-              between them and stops at the human gate.
-            </p>
-          </div>
-          <p className="text-caption uppercase tracking-widest text-muted-foreground">
-            Eight steps
-          </p>
-        </div>
-
-        <ol className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {AGENT_ORDER.map((agent, index) => (
-            <li
-              key={agent}
-              className="rounded-xl border border-border bg-card p-5"
-            >
-              <p className="text-caption uppercase tracking-widest text-brand">
-                Step {String(index + 1).padStart(2, "0")}
-              </p>
-              <p className="mt-2 text-small font-medium text-foreground">
-                {AGENT_META[agent].name}
-              </p>
-              <p className="mt-1 text-small text-muted-foreground">
-                {AGENT_META[agent].description}
-              </p>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section className="mt-16 rounded-2xl border border-brand/30 bg-brand/5 p-6 sm:mt-20 sm:p-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-heading text-foreground">The human gate</h2>
-            <p className="mt-2 max-w-xl text-small text-muted-foreground">
-              Nothing ships without a person in the loop. Review the package,
-              approve it, or ask for a revision with your own comment.
-            </p>
-          </div>
-          <Link
-            href="/campaigns/new"
-            className={cn(buttonVariants({ variant: "outline", size: "lg" }))}
-          >
-            Create the first campaign
-          </Link>
-        </div>
-      </section>
+        {!result.ok ? (
+          <ErrorState
+            className="mt-8"
+            title="Campaigns not loaded"
+            message={
+              isApiError(result.cause)
+                ? result.cause.message
+                : "Could not load your campaigns. Check your connection and try again."
+            }
+            action={<RetryRefreshButton />}
+          />
+        ) : result.campaigns.length === 0 ? (
+          <EmptyState
+            className="mt-8"
+            title="No campaigns yet"
+            description="Start with an idea. The agents will draft the package and stop for your review."
+            action={
+              <Link href="/campaigns/new" className={cn(buttonVariants({ size: "lg" }))}>
+                Create a campaign
+              </Link>
+            }
+          />
+        ) : (
+          <ul className="mt-8 space-y-3">
+            {[...result.campaigns]
+              .sort(
+                (left, right) =>
+                  Date.parse(right.created_at) - Date.parse(left.created_at),
+              )
+              .map((campaign) => (
+                <li key={campaign.id}>
+                  <CampaignCard campaign={campaign} />
+                </li>
+              ))}
+          </ul>
+        )}
+      </div>
     </PageContainer>
   );
 }

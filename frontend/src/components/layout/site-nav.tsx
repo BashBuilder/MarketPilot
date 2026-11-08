@@ -6,21 +6,21 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
-  { href: "/campaigns", label: "Campaigns" },
+  { href: "/", label: "Campaigns" },
   { href: "/campaigns/new", label: "New campaign" },
 ] as const;
 
 export function SiteNav() {
   const pathname = usePathname();
   const inCampaignSection =
-    pathname === "/campaigns" ||
+    pathname === "/" ||
     (pathname.startsWith("/campaigns/") && pathname !== "/campaigns/new");
 
   return (
     <nav aria-label="Primary" className="flex items-center gap-1">
       {LINKS.map((link) => {
         const isActive =
-          link.href === "/campaigns"
+          link.href === "/"
             ? inCampaignSection
             : pathname === link.href;
 
