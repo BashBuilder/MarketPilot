@@ -1,41 +1,39 @@
-"""Schema and semantic verification for validated agent outputs."""
+"""Schema verification plus the verified agent-step retry loop."""
 
-import hashlib
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Generic, Protocol, TypeVar
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 
 from pydantic import BaseModel, ValidationError
 
-from app.agents.outputs.ad_copy_set import AdCopySet
-from app.agents.outputs.asset_set import AssetSet, GeneratedAsset
-from app.harness.image_checks import is_decodable_png
+from app.core.config import Settings, get_settings
+from app.core.errors import RetryExhausted
+from app.harness.asset_validation import AssetSemanticValidator
+from app.harness.copy_validation import (
+    MAX_HEADLINE_LENGTH,
+    MIN_HEADLINE_LENGTH,
+    CopySemanticValidator,
+)
+from app.harness.issues import ValidationIssue, Validator
 
-T = TypeVar("T")
-ModelT = TypeVar("ModelT", bound=BaseModel)
+Prompt = Sequence[Mapping[str, str]]
+type AgentStep[T] = Callable[[Prompt], Awaitable[T]]
+EventCallback = Callable[[str, Mapping[str, object]], Awaitable[None]]
 
-MIN_HEADLINE_LENGTH = 5
-MAX_HEADLINE_LENGTH = 90
-
-
-@dataclass(frozen=True, slots=True)
-class ValidationIssue:
-    """One readable verification failure."""
-
-    code: str
-    message: str
-    path: str | None = None
-
-
-class Validator(Protocol[T]):
-    """A check that turns an output into a list of issues."""
-
-    def validate(self, output: T, /) -> list[ValidationIssue]:
-        """Return every issue found in ``output``; an empty list means valid."""
-        ...
+__all__ = [
+    "AgentStep",
+    "AssetSemanticValidator",
+    "CopySemanticValidator",
+    "EventCallback",
+    "MAX_HEADLINE_LENGTH",
+    "MIN_HEADLINE_LENGTH",
+    "Prompt",
+    "SchemaValidator",
+    "ValidationIssue",
+    "Validator",
+    "run_with_verification",
+]
 
 
-class SchemaValidator(Generic[ModelT]):
+class SchemaValidator[ModelT: BaseModel]:
     """Re-run Pydantic's schema validation at the verification boundary."""
 
     def __init__(self, model: type[ModelT]) -> None:
@@ -56,104 +54,66 @@ class SchemaValidator(Generic[ModelT]):
         return []
 
 
-class CopySemanticValidator:
-    """Checks that ad copy is usable, beyond what the schema guarantees."""
-
-    def validate(self, output: AdCopySet, /) -> list[ValidationIssue]:
-        if not output.variants:
-            return [ValidationIssue("copy.empty", "copy contains no variants")]
-
-        issues: list[ValidationIssue] = []
-        for index, variant in enumerate(output.variants, start=1):
-            label = f"variant {index} ({variant.channel or 'unknown channel'})"
-            headline_length = len(variant.headline.strip())
-            if headline_length == 0:
-                issues.append(ValidationIssue("copy.headline", f"{label}: headline is empty"))
-            elif headline_length < MIN_HEADLINE_LENGTH:
-                issues.append(
-                    ValidationIssue(
-                        "copy.headline",
-                        f"{label}: headline is {headline_length} characters "
-                        f"(minimum {MIN_HEADLINE_LENGTH})",
-                    )
-                )
-            elif headline_length > MAX_HEADLINE_LENGTH:
-                issues.append(
-                    ValidationIssue(
-                        "copy.headline",
-                        f"{label}: headline is {headline_length} characters "
-                        f"(maximum {MAX_HEADLINE_LENGTH})",
-                    )
-                )
-            if not variant.description.strip():
-                issues.append(ValidationIssue("copy.description", f"{label}: description is empty"))
-            if not variant.cta.strip():
-                issues.append(ValidationIssue("copy.cta", f"{label}: call to action is empty"))
-            if not variant.channel.strip():
-                issues.append(ValidationIssue("copy.channel", f"{label}: channel is empty"))
-        return issues
+def _issue_text(issue: ValidationIssue) -> str:
+    if issue.path:
+        return f"{issue.path}: {issue.message}"
+    return issue.message
 
 
-class AssetSemanticValidator:
-    """Checks local asset files exist, match their checksum and decode."""
+def _feedback_text(issues: Sequence[ValidationIssue]) -> str:
+    details = "\n".join(f"- {_issue_text(issue)}" for issue in issues)
+    return (
+        "Your previous output failed verification. Fix these issues and "
+        f"return the complete corrected output:\n{details}"
+    )
 
-    def __init__(self, asset_root: Path = Path("assets")) -> None:
-        self._asset_root = asset_root
 
-    def validate(self, output: AssetSet, /) -> list[ValidationIssue]:
-        if not output.assets:
-            return [ValidationIssue("assets.empty", "asset set contains no assets")]
+async def run_with_verification[T](
+    step: AgentStep[T],
+    *,
+    prompt: Prompt,
+    agent: str,
+    validators: Sequence[Validator[T]],
+    on_event: EventCallback,
+    settings: Settings | None = None,
+    max_attempts: int | None = None,
+) -> T:
+    """Run an agent step until its output passes every validator.
 
-        issues: list[ValidationIssue] = []
-        for index, asset in enumerate(output.assets, start=1):
-            issues.extend(self._validate_asset(index, asset))
-        return issues
+    Failed validation appends the issue text to the next prompt. Events are
+    delivered to ``on_event``; no SSE wiring happens here.
+    """
+    resolved_attempts = (
+        max_attempts
+        if max_attempts is not None
+        else (settings or get_settings()).retry_max_attempts
+    )
+    if resolved_attempts < 1:
+        raise ValueError("max_attempts must be at least 1")
 
-    def _validate_asset(self, index: int, asset: GeneratedAsset) -> list[ValidationIssue]:
-        label = f"asset {index} ({asset.uri})"
-        if asset.uri.lower().startswith(("http://", "https://")):
-            return [
-                ValidationIssue(
-                    "assets.remote",
-                    f"{label}: remote assets cannot be verified locally",
-                )
-            ]
+    base_messages = list(prompt)
+    last_feedback = ""
+    for attempt in range(1, resolved_attempts + 1):
+        messages: list[Mapping[str, str]] = list(base_messages)
+        if last_feedback:
+            messages.append({"role": "user", "content": last_feedback})
 
-        path = self._resolve(asset.uri)
-        if path is None:
-            return [ValidationIssue("assets.path", f"{label}: path escapes the asset root")]
-        if not path.is_file():
-            return [ValidationIssue("assets.missing", f"{label}: file does not exist")]
+        output = await step(messages)
+        issues = [issue for validator in validators for issue in validator.validate(output)]
+        if not issues:
+            return output
 
-        try:
-            data = path.read_bytes()
-        except OSError as error:
-            return [ValidationIssue("assets.unreadable", f"{label}: could not read file: {error}")]
-
-        issues: list[ValidationIssue] = []
-        actual_checksum = hashlib.sha256(data).hexdigest()
-        if actual_checksum != asset.checksum.lower():
-            issues.append(
-                ValidationIssue(
-                    "assets.checksum",
-                    f"{label}: checksum mismatch "
-                    f"(expected {asset.checksum}, got {actual_checksum})",
-                )
+        reason = "; ".join(_issue_text(issue) for issue in issues)
+        last_feedback = _feedback_text(issues)
+        await on_event("validation_failed", {"agent": agent, "reason": reason})
+        if attempt < resolved_attempts:
+            await on_event(
+                "retrying",
+                {
+                    "agent": agent,
+                    "attempt": attempt + 1,
+                    "max_attempts": resolved_attempts,
+                },
             )
-        if not is_decodable_png(data):
-            issues.append(
-                ValidationIssue("assets.image", f"{label}: file does not decode as a PNG image")
-            )
-        return issues
 
-    def _resolve(self, uri: str) -> Path | None:
-        path = Path(uri)
-        if path.is_absolute():
-            return path
-        root = self._asset_root.resolve()
-        resolved = (root / path).resolve()
-        try:
-            resolved.relative_to(root)
-        except ValueError:
-            return None
-        return resolved
+    raise RetryExhausted(agent, resolved_attempts, last_feedback)
