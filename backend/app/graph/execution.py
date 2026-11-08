@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings
 from app.database.models import Campaign, WorkflowRun
 from app.database.repositories import CheckpointRepository, ToolCallRepository
+from app.events.tool_events import tool_event_emitter
 from app.graph.node_runtime import NodeRuntime
+from app.graph.providers import build_providers
 from app.graph.state import WorkflowState
 from app.harness.checkpoint_support import as_uuid, parse_state
 from app.harness.checkpoints import resume_point
@@ -20,11 +22,9 @@ from app.harness.registry import ToolRegistry
 from app.harness.tool_runner import ToolRunner
 from app.harness.verification import EventCallback
 from app.llm.base import LLMClient
-from app.llm.deepseek import DeepSeekClient
-from app.llm.embeddings import build_embedder
-from app.tools.image_tools import FakeImageGenerator, register_image_tools
+from app.tools.image_tools import register_image_tools
 from app.tools.policy_tools import PolicySearcher, register_policy_tools
-from app.tools.search_tools import FakeSearchProvider, register_search_tools
+from app.tools.search_tools import register_search_tools
 
 
 async def _noop(name: str, data: Mapping[str, object]) -> None:
@@ -43,34 +43,53 @@ def build_runtime(
     emit: EventCallback | None = None,
 ) -> NodeRuntime:
     """Build the default tools, guardrails and audit middleware for one run."""
+    providers = build_providers(settings)
     registry = ToolRegistry()
-    register_search_tools(registry, FakeSearchProvider())
-    register_image_tools(registry, FakeImageGenerator(settings.asset_dir))
-    register_policy_tools(registry, PolicySearcher(session, embedder=build_embedder(settings)))
+    register_search_tools(registry, providers.search)
+    register_image_tools(registry, providers.images)
+    register_policy_tools(registry, PolicySearcher(session, embedder=providers.embedder))
     middleware = ToolCallMiddleware(
         registry=registry,
         guardrails=RunGuardrails(settings),
         repository=ToolCallRepository(session),
     )
     resolved_id = as_uuid(run_id)
+    resolved_emit = emit or NO_EVENTS
+
+    async def publish_tool(
+        agent_name: str,
+        tool: str,
+        duration_ms: int,
+        status: str,
+    ) -> None:
+        await resolved_emit(
+            "tool_called",
+            {
+                "agent": agent_name,
+                "tool": tool,
+                "duration_ms": duration_ms,
+                "status": status,
+            },
+        )
 
     def tools_for(agent: str) -> ToolRunner | None:
         async def call(tool: str, args: BaseModel, *, step: str = "") -> object:
-            return await middleware.call_tool(
-                run_id=resolved_id,
-                agent=agent,
-                step=step or agent,
-                tool=tool,
-                args=args,
-            )
+            with tool_event_emitter(publish_tool):
+                return await middleware.call_tool(
+                    run_id=resolved_id,
+                    agent=agent,
+                    step=step or agent,
+                    tool=tool,
+                    args=args,
+                )
 
         return call
 
     return NodeRuntime(
         run_id=resolved_id,
         session=session,
-        llm=llm or DeepSeekClient(settings),
-        emit=emit or NO_EVENTS,
+        llm=llm or providers.llm,
+        emit=resolved_emit,
         tools_for=tools_for,
         settings=settings,
     )

@@ -13,7 +13,8 @@ from app.agents.designer import DesignerAgent
 from app.agents.research import ResearchAgent
 from app.agents.reviewer import ReviewerAgent
 from app.core.config import Settings, get_settings
-from app.graph.node_runtime import Agent, NodeRuntime
+from app.database.repositories import RunRepository, VersionRepository
+from app.graph.node_runtime import Agent, NodeRuntime, event_data
 from app.graph.nodes import Node, make_node
 from app.graph.routing import (
     HUMAN_GATE,
@@ -111,6 +112,18 @@ def _router_node(router: Router, runtime: NodeRuntime) -> Node:
 def _approval_node(runtime: NodeRuntime) -> Node:
     async def request_human(state: WorkflowState) -> WorkflowState:
         await request_approval(runtime.run_id, session=runtime.session)
+        run = await RunRepository(runtime.session).get(runtime.run_id)
+        version = None
+        if run is not None:
+            version = await VersionRepository(runtime.session).latest(run.campaign_id)
+        await runtime.emit(
+            "awaiting_approval",
+            event_data(
+                runtime,
+                "human",
+                {"version": version.version if version is not None else 1},
+            ),
+        )
         return state.model_copy(update={"status": "awaiting_approval"})
 
     return request_human

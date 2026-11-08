@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_FRONTEND_ORIGIN = "http://localhost:3000,https://marketpilot-demo-frontend.vercel.app"
 
+AppMode = Literal["real", "fake"]
 ImageProvider = Literal["fake", "hosted", "huggingface", "cloudflare"]
 SearchProviderName = Literal["fake"]
 EmbedderKind = Literal["fake"]
@@ -45,6 +46,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    app_mode: AppMode = "real"
     deepseek_api_key: str
     deepseek_base_url: str = "https://api.deepseek.com"
     database_url: str
@@ -60,6 +62,12 @@ class Settings(BaseSettings):
     retry_max_attempts: int = Field(default=3, ge=1)
     score_threshold: int = Field(default=70, ge=0, le=100)
     max_auto_loops: int = Field(default=2, ge=0)
+    max_idea_length: int = Field(default=2000, ge=1)
+    max_comment_length: int = Field(default=2000, ge=1)
+    event_stream_maxlen: int = Field(default=2000, ge=1)
+    event_stream_ttl_seconds: int = Field(default=86400, ge=1)
+    sse_heartbeat_seconds: float = Field(default=15.0, gt=0)
+    sse_poll_seconds: float = Field(default=0.1, gt=0)
     frontend_origin: str = DEFAULT_FRONTEND_ORIGIN
 
     def __init__(self, **values: Any) -> None:
@@ -67,6 +75,8 @@ class Settings(BaseSettings):
             super().__init__(**values)
         except ValidationError as error:
             raise SettingsError(_describe_validation_error(error)) from error
+        if "*" in self.frontend_origins:
+            raise SettingsError("FRONTEND_ORIGIN must not contain a wildcard")
 
     @property
     def frontend_origins(self) -> list[str]:

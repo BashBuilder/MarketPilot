@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from app.core.errors import GuardrailViolation
 from app.core.logging import log_context
 from app.database.repositories.tool_calls import ToolCallRepository
+from app.events.tool_events import emit_tool_call
 from app.harness.guardrails import RunGuardrails
 from app.harness.registry import ToolRegistry
 
@@ -53,44 +54,62 @@ class ToolCallMiddleware:
                 validated = spec.args_model.model_validate(args)
                 result = await spec.handler(validated)
             except GuardrailViolation as error:
+                duration_ms = _elapsed_ms(started)
                 await self._record(
                     run_id=run_id,
                     agent=agent,
                     tool=tool,
                     args_hash=args_hash,
-                    duration_ms=_elapsed_ms(started),
+                    duration_ms=duration_ms,
                     status="denied",
                     cost=0.0,
                     error=str(error),
                 )
+                await self._emit(agent, tool, duration_ms, "denied")
                 self._logger.warning("tool call denied: %s", tool)
                 raise
             except Exception as error:
+                duration_ms = _elapsed_ms(started)
                 await self._record(
                     run_id=run_id,
                     agent=agent,
                     tool=tool,
                     args_hash=args_hash,
-                    duration_ms=_elapsed_ms(started),
+                    duration_ms=duration_ms,
                     status="error",
                     cost=0.0,
                     error=str(error),
                 )
+                await self._emit(agent, tool, duration_ms, "error")
                 self._logger.exception("tool call failed: %s", tool)
                 raise
 
             self._guardrails.record_cost(cost)
+            duration_ms = _elapsed_ms(started)
             await self._record(
                 run_id=run_id,
                 agent=agent,
                 tool=tool,
                 args_hash=args_hash,
-                duration_ms=_elapsed_ms(started),
+                duration_ms=duration_ms,
                 status="success",
                 cost=cost,
             )
+            await self._emit(agent, tool, duration_ms, "success")
             self._logger.info("tool call succeeded: %s", tool)
             return result
+
+    async def _emit(self, agent: str, tool: str, duration_ms: int, status: str) -> None:
+        """Publish the tool event without masking the tool's own outcome."""
+        try:
+            await emit_tool_call(
+                agent=agent,
+                tool=tool,
+                duration_ms=duration_ms,
+                status=status,
+            )
+        except Exception:
+            self._logger.exception("failed to publish tool call event: %s", tool)
 
     async def _record(
         self,

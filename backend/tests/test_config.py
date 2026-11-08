@@ -85,6 +85,15 @@ def test_frontend_origins_are_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
 
 
+def test_frontend_origin_rejects_wildcards(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name, value in REQUIRED_ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("FRONTEND_ORIGIN", "*")
+
+    with pytest.raises(SettingsError, match="wildcard"):
+        Settings(_env_file=None)
+
+
 def test_get_settings_is_cached(monkeypatch: pytest.MonkeyPatch) -> None:
     for name, value in REQUIRED_ENV.items():
         monkeypatch.setenv(name, value)

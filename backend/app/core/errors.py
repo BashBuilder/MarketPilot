@@ -39,11 +39,26 @@ class ToolError(MarketPilotError):
 
 class ValidationFailure(MarketPilotError):
     code = "validation_failed"
+    status_code = 422
 
     def __init__(self, agent: str, reason: str) -> None:
         self.agent = agent
         self.reason = reason
-        super().__init__(f"{agent} output failed validation: {reason}")
+        super().__init__(
+            f"{agent} output failed validation: {reason}",
+            details={"agent": agent, "reason": reason},
+        )
+
+
+class InvalidRequest(MarketPilotError):
+    """Reject invalid API input with the stable validation error code."""
+
+    code = "validation_failed"
+    status_code = 422
+
+    def __init__(self, message: str, *, field: str | None = None) -> None:
+        self.field = field
+        super().__init__(message, details={"field": field} if field else None)
 
 
 class GuardrailViolation(MarketPilotError):
@@ -82,6 +97,25 @@ class RevisionCommentRequired(MarketPilotError):
 
     def __init__(self) -> None:
         super().__init__("a revision requires a non-empty comment")
+
+
+class CampaignNotFound(MarketPilotError):
+    code = "campaign_not_found"
+    status_code = 404
+
+    def __init__(self, campaign_id: object) -> None:
+        super().__init__(
+            f"campaign {campaign_id} not found",
+            details={"campaign_id": str(campaign_id)},
+        )
+
+
+class RunNotFound(MarketPilotError):
+    code = "run_not_found"
+    status_code = 404
+
+    def __init__(self, run_id: object) -> None:
+        super().__init__(f"run {run_id} not found", details={"run_id": str(run_id)})
 
 
 class VersionNotFound(MarketPilotError):

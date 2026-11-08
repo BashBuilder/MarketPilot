@@ -61,9 +61,14 @@ async def test_linear_pipeline_persists_every_handoff(db_session, tmp_path: Path
         )
     )
     assert [checkpoint.node for checkpoint in checkpoints] == [*LINEAR_NODES, HUMAN_GATE]
-    assert [name for name, _ in events] == [
+    names = [name for name, _ in events]
+    assert [name for name in names if name != "tool_called"] == [
         name for _ in LINEAR_NODES for name in ("agent_started", "agent_handoff")
-    ]
-    assert events[-1][1]["to"] == HUMAN_GATE
+    ] + ["awaiting_approval"]
+    assert "tool_called" in names
+    assert events[-1][0] == "awaiting_approval"
+    assert events[-1][1]["agent"] == "human"
+    handoffs = [data for name, data in events if name == "agent_handoff"]
+    assert handoffs[-1]["to"] == HUMAN_GATE
     stored_run = await RunRepository(db_session).get(run.id)
     assert stored_run is not None and stored_run.status == RunStatus.AWAITING_APPROVAL
