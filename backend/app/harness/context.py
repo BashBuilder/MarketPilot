@@ -24,12 +24,27 @@ ALL_FIELDS: Final[tuple[str, ...]] = (
 )
 
 AGENT_CONTEXT_FIELDS: Final[Mapping[str, tuple[str, ...]]] = {
-    "brief": ("idea",),
-    "research": ("idea", "brief"),
-    "copywriter": ("idea", "brief", "research", "compliance"),
-    "creative_director": ("idea", "brief", "research", "copy"),
-    "designer": ("idea", "brief", "direction", "compliance"),
-    "compliance": ("idea", "brief", "copy", "direction", "assets", "compliance"),
+    "brief": ("idea", "brief", "revision_feedback"),
+    "research": ("idea", "brief", "research", "revision_feedback"),
+    "copywriter": ("idea", "brief", "research", "compliance", "copy", "revision_feedback"),
+    "creative_director": (
+        "idea",
+        "brief",
+        "research",
+        "copy",
+        "direction",
+        "revision_feedback",
+    ),
+    "designer": ("idea", "brief", "direction", "compliance", "assets", "revision_feedback"),
+    "compliance": (
+        "idea",
+        "brief",
+        "copy",
+        "direction",
+        "assets",
+        "compliance",
+        "revision_feedback",
+    ),
     "reviewer": ALL_FIELDS,
     "supervisor": ALL_FIELDS,
 }

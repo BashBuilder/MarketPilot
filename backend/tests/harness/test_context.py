@@ -57,6 +57,17 @@ def test_estimator_is_injectable() -> None:
     assert calls
 
 
+def test_revision_target_sees_the_comment_and_its_previous_output() -> None:
+    state = make_state().model_copy(
+        update={"revision_feedback": "Tighten the headline", "target_node": "copywriter"}
+    )
+
+    context = build_agent_context(state, "copywriter", 100_000)
+
+    assert context["revision_feedback"] == "Tighten the headline"
+    assert context["copy"] == state.model_dump(mode="json")["copy"]
+
+
 def test_unknown_agent_is_rejected() -> None:
     with pytest.raises(ValueError, match="unknown agent"):
         build_agent_context(make_state(), "nobody", 1000)

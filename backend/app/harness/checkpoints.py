@@ -11,6 +11,7 @@ from app.database.repositories import (
     RunRepository,
 )
 from app.graph.state import WorkflowState
+from app.graph.versioning import ensure_version, snapshot_version
 from app.harness.checkpoint_support import (
     as_uuid,
     get_run,
@@ -18,7 +19,7 @@ from app.harness.checkpoint_support import (
     state_for,
     use_session,
 )
-from app.harness.gate import ensure_version, next_after_last_agent
+from app.harness.gate import next_after_last_agent
 from app.harness.pipeline import DONE, HUMAN_GATE, PIPELINE_NODES, next_node
 
 __all__ = [
@@ -95,6 +96,8 @@ async def request_approval(
     async with use_session(session) as db:
         run = await get_run(db, run_id)
         state = await state_for(db, run, "awaiting_approval")
+        if run.status is not RunStatus.AWAITING_APPROVAL:
+            await snapshot_version(db, run, state)
         await RunRepository(db).update_status(
             run,
             RunStatus.AWAITING_APPROVAL,
@@ -114,6 +117,7 @@ async def submit_decision(
     target_node: str | None = None,
     *,
     campaign_version_id: uuid.UUID | None = None,
+    record_decision: bool = True,
     session: AsyncSession | None = None,
 ) -> str:
     """Record an approve/revise decision and return the node to continue from."""
@@ -125,13 +129,14 @@ async def submit_decision(
         run = await get_run(db, run_id)
         state = await state_for(db, run, "awaiting_approval")
         version = await ensure_version(db, run, state, campaign_version_id)
-        await ApprovalRepository(db).create(
-            run_id=run.id,
-            campaign_version_id=version.id,
-            decision=decision_value,
-            comment=comment,
-            target_node=target_node,
-        )
+        if record_decision:
+            await ApprovalRepository(db).create(
+                run_id=run.id,
+                campaign_version_id=version.id,
+                decision=decision_value,
+                comment=comment,
+                target_node=target_node,
+            )
         if decision_value is ApprovalDecision.APPROVE:
             await RunRepository(db).update_status(run, RunStatus.COMPLETED, current_node=DONE)
             return DONE

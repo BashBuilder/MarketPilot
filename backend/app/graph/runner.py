@@ -67,6 +67,7 @@ async def continue_run(
     llm: LLMClient | None = None,
     agents: Mapping[str, Agent] | None = None,
     emit: EventCallback | None = None,
+    record_decision: bool = True,
     session: AsyncSession | None = None,
     settings: Settings | None = None,
 ) -> WorkflowState:
@@ -87,7 +88,14 @@ async def continue_run(
             target = routed if routed in LINEAR_NODES else None
 
         runtime = build_runtime(run.id, db, resolved, llm=llm, emit=emit)
-        continuation = await submit_decision(run.id, choice, comment, target, session=db)
+        continuation = await submit_decision(
+            run.id,
+            choice,
+            comment,
+            target,
+            record_decision=record_decision,
+            session=db,
+        )
         if choice is ApprovalDecision.APPROVE:
             completed = state.model_copy(update={"status": "completed"})
             await save_checkpoint(run.id, DONE, completed, session=db)

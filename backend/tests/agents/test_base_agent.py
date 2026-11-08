@@ -75,8 +75,9 @@ async def test_only_mapped_context_reaches_the_prompt() -> None:
     assert system["content"].startswith("You are the Brief agent")
     assert 'source="workflow_state:brief"' in user["content"]
     context = fenced_context(user["content"])
-    assert set(context) == {"idea"}
+    assert set(context) == {"idea", "brief", "revision_feedback"}
     assert context["idea"] == state.idea
+    assert context["revision_feedback"] is None
     assert events == []
 
 

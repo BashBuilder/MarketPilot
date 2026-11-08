@@ -38,3 +38,17 @@ class ApprovalRepository:
         )
         result = await self._session.scalars(statement)
         return list(result)
+
+    async def approved_for_version(
+        self,
+        campaign_version_id: uuid.UUID,
+    ) -> Approval | None:
+        statement = (
+            select(Approval)
+            .where(
+                Approval.campaign_version_id == campaign_version_id,
+                Approval.decision == ApprovalDecision.APPROVE,
+            )
+            .limit(1)
+        )
+        return await self._session.scalar(statement)

@@ -30,7 +30,8 @@ TEXT_FIELDS: Final[Mapping[str, frozenset[str]]] = {
     "score": frozenset(("justification",)),
 }
 FREE_TEXT_FIELDS: Final[tuple[str, ...]] = ("errors", "revision_feedback")
-DROPPABLE_FIELDS: Final = ("direction", "assets", "copy", "score", "errors", "revision_feedback")
+# The human revision comment must reach the target node, so it is never dropped.
+DROPPABLE_FIELDS: Final = ("direction", "assets", "copy", "score", "errors")
 
 
 def estimate_tokens(text: str) -> int:
