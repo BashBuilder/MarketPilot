@@ -61,6 +61,8 @@ describe("LiveRunView", () => {
     render(<LiveRunView campaignId="campaign-1" runId={TEST_RUN_ID} />);
     const source = FakeEventSource.instances[0];
 
+    expect(screen.getByText("Connecting to the run…")).toBeInTheDocument();
+
     act(() => source?.fail());
     expect(screen.getByText(/Connection lost\. Reconnecting/)).toBeInTheDocument();
 

@@ -39,6 +39,14 @@ export function LiveRunView({ campaignId, runId }: LiveRunViewProps) {
             <span className="font-mono text-foreground">{runId}</span>
           </p>
         </header>
+        {connection === "connecting" ? (
+          <p
+            role="status"
+            className="rounded-full border border-border bg-muted px-3 py-1 text-small text-muted-foreground"
+          >
+            Connecting to the run…
+          </p>
+        ) : null}
         {connection === "reconnecting" ? (
           <p
             role="status"
