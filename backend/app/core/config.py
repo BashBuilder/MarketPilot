@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     max_image_calls_per_run: int = Field(default=8, ge=0)
     max_search_calls_per_run: int = Field(default=20, ge=0)
     retry_max_attempts: int = Field(default=3, ge=1)
+    score_threshold: int = Field(default=70, ge=0, le=100)
+    max_auto_loops: int = Field(default=2, ge=0)
     frontend_origin: str = DEFAULT_FRONTEND_ORIGIN
 
     def __init__(self, **values: Any) -> None:

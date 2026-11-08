@@ -40,6 +40,8 @@ def test_settings_loads_required_values_and_defaults(
     assert settings.max_image_calls_per_run == 8
     assert settings.max_search_calls_per_run == 20
     assert settings.retry_max_attempts == 3
+    assert settings.score_threshold == 70
+    assert settings.max_auto_loops == 2
     assert settings.frontend_origins == [
         "http://localhost:3000",
         "https://marketpilot-demo-frontend.vercel.app",
